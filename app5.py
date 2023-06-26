@@ -7,12 +7,17 @@ import pymysql
 
 st.set_page_config(layout="wide")
 
+username=st.secrets['AWS_RDS_username']
+password=st.secrets['AWS_RDS_password']
+Endpoint=st.secrets['Endpoint']
+Dbase=st.secrets['DATABASE']
+
 # Establish a connection to the MySQL database
 connection = pymysql.connect(
-    host="localhost",
-    user="root",
-    password="ayzu#2020",
-    database="business_card"
+    host=Endpoint,
+    user=username,
+    password=password,
+    database=Dbase
 )
 cursor = connection.cursor()
 
