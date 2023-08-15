@@ -7,29 +7,25 @@ import pymysql
 
 st.set_page_config(layout="wide")
 
-username=st.secrets['AWS_RDS_username']
-password=st.secrets['AWS_RDS_password']
-Endpoint=st.secrets['Endpoint']
-Dbase=st.secrets['DATABASE']
-
 # Establish a connection to the MySQL database
 connection = pymysql.connect(
-    host=Endpoint,
-    user=username,
-    password=password,
-    database=Dbase
+    host="localhost",
+    user="root",
+    password="ayzu#2020",
+    database="business_card"
 )
 cursor = connection.cursor()
 
 # Create a table for storing the extracted information
 create_table_query = """
-CREATE TABLE IF NOT EXISTS extracted_infos (
+CREATE TABLE  IF NOT EXISTS extracted_information (
     id INT AUTO_INCREMENT PRIMARY KEY,
     image LONGBLOB,
     email VARCHAR(255),
     phone_numbers VARCHAR(255),
     address VARCHAR(255),
     card_holder_name VARCHAR(255),
+    designation VARCHAR(25),
     company_details TEXT,
     website_url VARCHAR(255),
     pin_code VARCHAR(10)
@@ -38,13 +34,13 @@ CREATE TABLE IF NOT EXISTS extracted_infos (
 cursor.execute(create_table_query)
 
 # Store the extracted information in the MySQL database
-def store_extracted_info(image,email, phone_numbers, address, card_holder_name, company_details, website_url, pin_code):
+def store_extracted_info(image,email, phone_numbers, address, card_holder_name,designation, company_details, website_url, pin_code):
     img_bytes = cv2.imencode('.jpg', image)[1].tobytes()
     insert_query = """
-    INSERT INTO extracted_infos (image,email, phone_numbers, address, card_holder_name, company_details, website_url, pin_code)
-    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+    INSERT INTO extracted_information (image,email, phone_numbers, address, card_holder_name, designation,company_details, website_url, pin_code)
+    VALUES (%s, %s, %s, %s, %s, %s, %s, %s,%s)
     """
-    values = (img_bytes,email, ",".join(phone_numbers), address, card_holder_name, company_details, website_url, pin_code)
+    values = (img_bytes,email, ",".join(phone_numbers), address, card_holder_name,designation,company_details, website_url, pin_code)
     cursor.execute(insert_query, values)
     connection.commit()
 
@@ -124,10 +120,12 @@ def process_business_card(image):#, blur_kernel_size, threshold_block_size, thre
     # Extract text from the processed image
          #extracted_text,confidences = extract_text(processed_image)
     
+
+
     # Extracted information
     email = ''
     phone_numbers = ''
-    address = ''
+    address = []
     card_holder_name = ''
     designation=''
     company_details = ''
@@ -140,10 +138,22 @@ def process_business_card(image):#, blur_kernel_size, threshold_block_size, thre
             email = result.lower()
         elif re.search(r'(?:ph|phone|phno)?\s*(?:[+-]?\d\s*[\(\)]*){7,}', result):
             phone_numbers=(result)
-        elif re.search(r'\d{6,7}', result.lower()):
-            pin_code = re.search(r'\d{6,7}', result.lower()).group()
-        elif re.match(r"(?!.*@)(www|.*com$)", result):
+        elif re.search(r'\d{6,7}', result):
+            pin_code = re.search(r'\d{6,7}', result).group() 
+             #elif re.match(r"(?!.*@)(www|.*com$)", result.replace(".", r"\.")):
+        #elif re.match(r"(?!.*@)(www\.|\.*com$)", result):
+        #elif re.match(r"(?!.*@)(www\.[a-zA-Z0-9]+\.[a-zA-Z0-9]+|.*com$)", result):
+        elif re.search(r'\bwww', result.lower()):
+        #elif re.search(r'www\.[a-zA-Z0-9-]+\.[a-zA-Z]{2,3}', result):
             website_url = result.lower()
+        # elif re.search(r'(\d+\s*[a-zA-Z\s]*),?\s*([a-zA-Z\s]+),?\s*([a-zA-Z\s]+)',result):
+        #     address=result
+        # elif re.search (r'^(.*?)(?:,|$)',result):
+        #     address.append(result)
+        
+
+
+            #website_url = result.lower()
         else:
             if not address and any(keyword in result.lower() for keyword in ['road', 'floor', ' st ', 'st,', 'street', ' dt ',
                                                                                  'district', 'near', 'beside', 'opposite',
@@ -151,7 +161,7 @@ def process_business_card(image):#, blur_kernel_size, threshold_block_size, thre
                                                                                  'state', 'country', 'post', 'zip', 'city',
                                                                                  'zone', 'mandal', 'town', 'rural', 'circle',
                                                                                  'next to', 'across from', 'area',
-                                                                                 'building', 'towers', 'village',
+                                                                                 'building', 'towers', 'village','123',
                                                                                  ' ST ', ' VA ', ' VA,', ' EAST ', ' WEST ',
                                                                                  ' NORTH ', ' SOUTH ']) or re.search(r'\d{6,7}',
                                                                                                                    result):
@@ -208,7 +218,6 @@ def main():
         
         # Process the business card image and extract text
         email, phone_numbers, address, card_holder_name,designation, company_details, website_url, pin_code = process_business_card(image)
-        
         # Display the original image
         st.subheader(":blue[Original Image]")
         st.image(image)
@@ -243,33 +252,35 @@ def main():
         
         # Store extracted information in the database
            if col1.button("Store Info"):
-            store_extracted_info(image,email, phone_numbers, address, card_holder_name, company_details, website_url, pin_code)
+            store_extracted_info(image,email, phone_numbers, address, card_holder_name,designation,company_details, website_url, pin_code)
             if store_extracted_info:
               st.success(":white_check_mark: Information stored in the database.")
         
         # Update extracted information in the database
            with col2:
               st.write("Update Info")
-              cursor.execute("SELECT * FROM extracted_infos")
+              cursor.execute("SELECT * FROM extracted_information")
               extracted_info_list = cursor.fetchall()
               card_id = [info[0] for info in extracted_info_list]
 
               update_id=st.multiselect("id you want to update",card_id)
               if update_id:
                 for id in update_id:
-                  update_email = st.text_input(label="Enter new email")
-                  update_phone_numbers = st.text_input( label="Enter new phone number")
-                  update_address = st.text_area( label="Enter new address")
-                  update_card_holder_name = st.text_input( label="Enter new card holder name")
-                  update_company_details = st.text_input(label="Enter new company details")
-                  update_website_url = st.text_input( label="Enter new website URL")
-                  update_pin_code = st.text_input( label="Enter new pin code")
+                  update_email = st.text_input(label="Enter new email",key=12)
+                  update_phone_numbers = st.text_input( label="Enter new phone number",key=13)
+                  update_address = st.text_area( label="Enter new address",key=1)
+                  update_card_holder_name = st.text_input( label="Enter new card holder name",key=24)
+                  update_designation = st.text_input( label="Enter his/her designation",key=28)
+                  update_company_details = st.text_input(label="Enter new company details",key=43)
+                  update_website_url = st.text_input( label="Enter new website URL",key=2)
+                  update_pin_code = st.text_input( label="Enter new pin code",key=3)
                   if st.button("update"):
                #update_extracted_info(update_id, update_email, update_phone_numbers,update_address, update_card_holder_name, update_company_details, update_website_url, update_pin_code)
                        cursor.execute(
-                    "UPDATE extracted_infos SET email = %s, phone_numbers = %s, address = %s, card_holder_name = %s, company_details = %s, website_url = %s, pin_code = %s WHERE id = %s",
-                    (update_email, update_phone_numbers, update_address, update_card_holder_name, update_company_details, update_website_url, update_pin_code, id)
+                    "UPDATE extracted_information SET email = %s, phone_numbers = %s, address = %s, card_holder_name = %s, designation=%s,company_details = %s, website_url = %s, pin_code = %s WHERE id = %s",
+                    (update_email, update_phone_numbers, update_address, update_card_holder_name, update_designation,update_company_details, update_website_url, update_pin_code, id)
                 )
+                       connection.commit()
                        st.success(":white_check_mark: Information updated in the database.")
                   #except:
                    # st.error("Error occurred while updating the information.")
@@ -280,7 +291,7 @@ def main():
            
            with col3:
                st.write(' ')
-               cursor.execute("SELECT * FROM extracted_infos")
+               cursor.execute("SELECT * FROM extracted_information")
                extracted_info_list = cursor.fetchall()
                card_id = [info[0] for info in extracted_info_list]
                st.write("select entries to delete") 
@@ -288,7 +299,7 @@ def main():
 
                if st.button('DELETE SELECTED ENTRIES'):
                     for option in selected_options:
-                       cursor.execute("DELETE FROM extracted_infos WHERE id = " +str(option))
+                       cursor.execute("DELETE FROM extracted_information WHERE id = " +str(option))
                        connection.commit()
                        st.write("selected id deleted successfully")
                        st.write(' ')    
