@@ -11,7 +11,7 @@ st.set_page_config(layout="wide")
 connection = pymysql.connect(
     host="localhost",
     user="root",
-    password="ayzu#2020",
+    password="*****",
     database="business_card"
 )
 cursor = connection.cursor()
